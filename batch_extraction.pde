@@ -5,12 +5,11 @@ float SCORE_THRESHOLD = 0.6;
 String BASEFOLDER = "output";
 String BASENAME = "plum";
 String EXTENSION = "png";
+int    FRAMERATE = 30;
 
 int[][] connections = {
-  {ModelUtils.POSE_NOSE_INDEX, ModelUtils.POSE_LEFT_EYE_INDEX}, 
-  {ModelUtils.POSE_LEFT_EYE_INDEX, ModelUtils.POSE_LEFT_EAR_INDEX}, 
-  {ModelUtils.POSE_NOSE_INDEX, ModelUtils.POSE_RIGHT_EYE_INDEX}, 
-  {ModelUtils.POSE_RIGHT_EYE_INDEX, ModelUtils.POSE_RIGHT_EAR_INDEX}, 
+  {ModelUtils.POSE_RIGHT_EYE_INDEX, ModelUtils.POSE_LEFT_EYE_INDEX}, 
+
   {ModelUtils.POSE_RIGHT_SHOULDER_INDEX, ModelUtils.POSE_RIGHT_ELBOW_INDEX}, 
   {ModelUtils.POSE_RIGHT_ELBOW_INDEX, ModelUtils.POSE_RIGHT_WRIST_INDEX}, 
   {ModelUtils.POSE_LEFT_SHOULDER_INDEX, ModelUtils.POSE_LEFT_ELBOW_INDEX}, 
@@ -19,52 +18,78 @@ int[][] connections = {
   {ModelUtils.POSE_RIGHT_KNEE_INDEX, ModelUtils.POSE_RIGHT_ANKLE_INDEX}, 
   {ModelUtils.POSE_LEFT_HIP_INDEX, ModelUtils.POSE_LEFT_KNEE_INDEX}, 
   {ModelUtils.POSE_LEFT_KNEE_INDEX, ModelUtils.POSE_LEFT_ANKLE_INDEX}, 
+
   {ModelUtils.POSE_RIGHT_SHOULDER_INDEX, ModelUtils.POSE_LEFT_SHOULDER_INDEX}, 
   {ModelUtils.POSE_LEFT_SHOULDER_INDEX, ModelUtils.POSE_LEFT_HIP_INDEX}, 
   {ModelUtils.POSE_LEFT_HIP_INDEX, ModelUtils.POSE_RIGHT_HIP_INDEX}, 
   {ModelUtils.POSE_RIGHT_HIP_INDEX, ModelUtils.POSE_RIGHT_SHOULDER_INDEX}, 
 };
 
+int[] head = {
+  ModelUtils.POSE_RIGHT_EYE_INDEX, 
+  ModelUtils.POSE_LEFT_EYE_INDEX, 
+  ModelUtils.POSE_LEFT_EAR_INDEX, 
+  ModelUtils.POSE_RIGHT_EAR_INDEX, 
+  ModelUtils.POSE_NOSE_INDEX, 
+};
+
+int[] torso = {
+  ModelUtils.POSE_RIGHT_HIP_INDEX, 
+  ModelUtils.POSE_LEFT_HIP_INDEX, 
+  ModelUtils.POSE_RIGHT_SHOULDER_INDEX, 
+  ModelUtils.POSE_LEFT_SHOULDER_INDEX, 
+};
+
 RunwayHTTP runway;
 
 PImage frame;
-int fileCounter = 400;
+int fileOffset = 401;
+int fileCounter = 0;
 
+JSONObject fullData;
+JSONArray framesData;
 
 void setup() {
 
   size(600, 800);
   background(0);
+  textSize(16);
   frameRate(60);
+
+  fullData = new JSONObject();
+  framesData = new JSONArray();
 
   runway = new RunwayHTTP(this);
   runway.setAutoUpdate(false);
-  
 }
 
 void draw() {
 
-  String filename = getFilename(fileCounter);
+  String filename = getFilename(fileCounter + fileOffset);
   frame = loadImage(filename);
-  
+
   if (frame == null) {
     noLoop();
+    fullData.setInt("videoStart", fileOffset);
+    fullData.setInt("videoEnd", fileOffset+fileCounter-1);
+    fullData.setInt("totalFrames", fileCounter);
+    fullData.setInt("frameRate", FRAMERATE);
+    fullData.setJSONArray("frames", framesData);
+    saveJSONObject(fullData, "data/"+BASENAME+".json");
     return;
   }
-  
+
   image(frame, 0, 0);
   sendFrameToRunway();
 
+  fill(0, 100);
+  noStroke();
+  rect(0, 0, frame.width, 45);
+
+  fill(255);
+  text("Frame " + (fileCounter + fileOffset) + "  (" + nf(frameRate, 0, 1)  + "fps)", 8, 25);
+
   fileCounter++;
-
-  //  
-
-  //image(frame, 0, 0);
-
-  //fill(0, 100);
-  //noStroke();
-  //rect(0, 0, frame.width, 45);
-  //rect(0, frame.height, frame.width, 45);
 }
 
 void sendFrameToRunway() {
@@ -110,15 +135,22 @@ void sendFrameToRunway() {
 
 void drawPoseNetParts(JSONObject data) {
 
-  fill(0, 80);
+  fill(0, 70);
   noStroke();
   rect(0, frame.height, frame.width, frame.height);
 
   stroke(255);
   strokeWeight(2);
 
-  JSONArray humans = data.getJSONArray("poses");
-  JSONArray keypoints = humans.getJSONArray(0);
+  JSONArray human = data.getJSONArray("poses");
+  JSONArray keypoints = human.getJSONArray(0);
+
+  PVector heart = new PVector(0, 0);
+  for (int i = 0; i < torso.length; i++) {
+    JSONArray part = keypoints.getJSONArray(torso[i]);
+    heart.add(part.getFloat(0), part.getFloat(1));
+  }  
+  heart.div(torso.length);
 
   for (int i = 0; i < connections.length; i++) {
 
@@ -132,6 +164,20 @@ void drawPoseNetParts(JSONObject data) {
 
     line(startX, startY, endX, endY);
   }
+
+  PVector nose = new PVector(0, 0);
+  for (int i = 0; i < head.length; i++) {
+    JSONArray part = keypoints.getJSONArray(head[i]);
+    nose.add(part.getFloat(0), part.getFloat(1));
+  }  
+  nose.div(head.length);
+  ellipse(nose.x* frame.width, nose.y* frame.height + frame.height, 15, 20);
+
+
+
+  noStroke();
+  fill(175, 75, 0);
+  circle(heart.x* frame.width, heart.y* frame.height + frame.height, 12);
 }
 
 
@@ -150,9 +196,26 @@ void drawPoseNetParts(JSONObject data) {
  */
 
 void runwayDataEvent(JSONObject runwayData) {
+
+  JSONObject frameData = new JSONObject();
+
   if (runwayData.getJSONArray("scores").size() > 0) {
+
     drawPoseNetParts(runwayData);
+    frameData.setBoolean("interpolation", false);
+    frameData.setFloat("score", runwayData.getJSONArray("scores").getFloat(0));
+    frameData.setJSONArray("data", runwayData.getJSONArray("poses"));
+  } else {
+
+    frameData.setBoolean("interpolation", true);
+    frameData.setFloat("score", 0);
   }
+
+  frameData.setFloat("timeRel", fileCounter/float(FRAMERATE));
+  frameData.setFloat("timeAbs", (fileCounter + fileOffset)/float(FRAMERATE));
+  frameData.setInt("frameRel", fileCounter);
+  frameData.setInt("frameAbs", fileCounter + fileOffset);
+  framesData.setJSONObject(fileCounter, frameData);
 }
 
 public void runwayInfoEvent(JSONObject info) {
@@ -167,5 +230,5 @@ public void runwayErrorEvent(String message) {
 
 
 public String getFilename(int index) {
-  return BASEFOLDER + "/" + BASENAME + "_" + nf(fileCounter, 5) + "." + EXTENSION;
+  return BASEFOLDER + "/" + BASENAME + "_" + nf(index, 5) + "." + EXTENSION;
 }

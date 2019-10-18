@@ -69,10 +69,12 @@ void draw() {
 
   fill(0, 100);
   noStroke();
-  rect(0, 0, width, 38);
+  rect(0, 0, width, 20);
+  rect(0, frame.height, width, 20);
 
   fill(255);
-  text(status + "\n" + getCurrFrame() + "/" + getLastFrame(), 8, 16);
+  text(getCurrFrame() + "/" + getLastFrame(), 8, 15);
+  text(frameCounters[PARTIAL_COUNTER] + "/" + frameCounters[FULL_COUNTER], 8, frame.height + 15);
 }
 
 void sendFrameToRunway() {
@@ -229,7 +231,7 @@ void runwayDataEvent(JSONObject runwayData) {
     frameCounters[PARTIAL_COUNTER]++;
     drawPoseNetParts(runwayData);
   }
-  print(frameCounters[PARTIAL_COUNTER] + "/" + frameCounters[FULL_COUNTER]);
+  print();
   println(" " + runwayData.getJSONArray("scores"));
 }
 

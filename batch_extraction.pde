@@ -1,20 +1,21 @@
 import com.runwayml.*;
 import processing.video.*;
 
-RunwayHTTP runway;
-float scoreThreshold = 0.8;
-
-Movie movie;
 int FULL_COUNTER = 0;
 int PARTIAL_COUNTER = 1;
-int[] frameCounters = {0, 0};
+float SCORE_THRESHOLD = 0.6;
 
+RunwayHTTP runway;
+
+Movie movie;
+int[] frameCounters = {0, 0};
+int currentMovieFrame = 1;
 
 PImage frame;
 float scale;
 int scaledW, scaledH;
 
-String status = "";
+int totalTime;
 
 int[][] connections = {
   {ModelUtils.POSE_NOSE_INDEX, ModelUtils.POSE_LEFT_EYE_INDEX}, 
@@ -57,24 +58,33 @@ void setup() {
   scale = min(float(frame.width) / movie.width, float(frame.height) / movie.height);
   scaledW = int(movie.width*scale);
   scaledH = int(movie.height*scale);
+  
+  totalTime = millis();
+  
 }
 
 void draw() {
-
-  int f=ceil (map(mouseX, 0, width, 1, getLastFrame()));
-  gotoFrame(f);
+  
+  gotoFrame(currentMovieFrame);
+  sendFrameToRunway();
 
   frame.copy(movie, 0, 0, movie.width, movie.height, (frame.width-scaledW)/2, (frame.height-scaledH)/2, scaledW, scaledH);
   image(frame, 0, 0);
 
   fill(0, 100);
   noStroke();
-  rect(0, 0, width, 20);
-  rect(0, frame.height, width, 20);
+  rect(0, 0, frame.width, 20);
+  rect(0, frame.height, frame.width, 20);
 
   fill(255);
-  text(getCurrFrame() + "/" + getLastFrame(), 8, 15);
+  text(currentMovieFrame + ":" + getCurrFrame() + "/" + getLastFrame(), 8, 15);
   text(frameCounters[PARTIAL_COUNTER] + "/" + frameCounters[FULL_COUNTER], 8, frame.height + 15);
+
+  currentMovieFrame++;
+  if (currentMovieFrame>getLastFrame()) {
+    println(millis()-totalTime);
+    noLoop();
+  }
 }
 
 void sendFrameToRunway() {
@@ -84,7 +94,7 @@ void sendFrameToRunway() {
   input.setString("image", ModelUtils.toBase64(frame));
   input.setString("estimationType", "Single Pose");
   input.setInt("maxPoseDetections", 1);
-  input.setFloat("scoreThreshold", scoreThreshold);
+  input.setFloat("scoreThreshold", SCORE_THRESHOLD);
 
   runway.query(input.toString());
 }
@@ -120,6 +130,10 @@ void sendFrameToRunway() {
 
 void drawPoseNetParts(JSONObject data) {
 
+  fill(0, 50);
+  noStroke();
+  rect(0, frame.height, frame.width, frame.height);
+ 
   stroke(255);
   strokeWeight(2);
 
@@ -138,23 +152,6 @@ void drawPoseNetParts(JSONObject data) {
 
     line(startX, startY, endX, endY);
   }
-}
-
-
-/*
-
- .88b  d88.  .d88b.  db    db .d8888. d88888b
- 88'YbdP`88 .8P  Y8. 88    88 88'  YP 88'
- 88  88  88 88    88 88    88 `8bo.   88ooooo
- 88  88  88 88    88 88    88   `Y8b. 88~~~~~
- 88  88  88 `8b  d8' 88b  d88 db   8D 88.
- YP  YP  YP  `Y88P'  ~Y8888P' `8888Y' Y88888P
- 
- */
-
-void mousePressed() {
-  image(frame, 0, height/2);
-  sendFrameToRunway();
 }
 
 
@@ -230,9 +227,7 @@ void runwayDataEvent(JSONObject runwayData) {
   if (runwayData.getJSONArray("scores").size() > 0) {
     frameCounters[PARTIAL_COUNTER]++;
     drawPoseNetParts(runwayData);
-  }
-  print();
-  println(" " + runwayData.getJSONArray("scores"));
+  } 
 }
 
 public void runwayInfoEvent(JSONObject info) {

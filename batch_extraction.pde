@@ -1,21 +1,10 @@
 import com.runwayml.*;
-import processing.video.*;
 
-int FULL_COUNTER = 0;
-int PARTIAL_COUNTER = 1;
 float SCORE_THRESHOLD = 0.6;
 
-RunwayHTTP runway;
-
-Movie movie;
-int[] frameCounters = {0, 0};
-int currentMovieFrame = 1;
-
-PImage frame;
-float scale;
-int scaledW, scaledH;
-
-int totalTime;
+String BASEFOLDER = "output";
+String BASENAME = "plum";
+String EXTENSION = "png";
 
 int[][] connections = {
   {ModelUtils.POSE_NOSE_INDEX, ModelUtils.POSE_LEFT_EYE_INDEX}, 
@@ -30,61 +19,52 @@ int[][] connections = {
   {ModelUtils.POSE_RIGHT_KNEE_INDEX, ModelUtils.POSE_RIGHT_ANKLE_INDEX}, 
   {ModelUtils.POSE_LEFT_HIP_INDEX, ModelUtils.POSE_LEFT_KNEE_INDEX}, 
   {ModelUtils.POSE_LEFT_KNEE_INDEX, ModelUtils.POSE_LEFT_ANKLE_INDEX}, 
-
   {ModelUtils.POSE_RIGHT_SHOULDER_INDEX, ModelUtils.POSE_LEFT_SHOULDER_INDEX}, 
   {ModelUtils.POSE_LEFT_SHOULDER_INDEX, ModelUtils.POSE_LEFT_HIP_INDEX}, 
   {ModelUtils.POSE_LEFT_HIP_INDEX, ModelUtils.POSE_RIGHT_HIP_INDEX}, 
   {ModelUtils.POSE_RIGHT_HIP_INDEX, ModelUtils.POSE_RIGHT_SHOULDER_INDEX}, 
 };
 
+RunwayHTTP runway;
+
+PImage frame;
+int fileCounter = 400;
+
 
 void setup() {
 
   size(600, 800);
   background(0);
-
-  frame = createImage(600, 400, RGB);
+  frameRate(60);
 
   runway = new RunwayHTTP(this);
   runway.setAutoUpdate(false);
-
-  //selectInput("Select a file to process:", "fileSelected");
-
-  movie = new Movie(this, "dance_of_the_sugar_plum_fairy_from_the_nutcracker_the_royal_ballet.mp4");
-  movie.play();
-  movie.jump(0);
-  movie.pause();
-
-  scale = min(float(frame.width) / movie.width, float(frame.height) / movie.height);
-  scaledW = int(movie.width*scale);
-  scaledH = int(movie.height*scale);
-  
-  totalTime = millis();
   
 }
 
 void draw() {
+
+  String filename = getFilename(fileCounter);
+  frame = loadImage(filename);
   
-  gotoFrame(currentMovieFrame);
+  if (frame == null) {
+    noLoop();
+    return;
+  }
+  
+  image(frame, 0, 0);
   sendFrameToRunway();
 
-  frame.copy(movie, 0, 0, movie.width, movie.height, (frame.width-scaledW)/2, (frame.height-scaledH)/2, scaledW, scaledH);
-  image(frame, 0, 0);
+  fileCounter++;
 
-  fill(0, 100);
-  noStroke();
-  rect(0, 0, frame.width, 20);
-  rect(0, frame.height, frame.width, 20);
+  //  
 
-  fill(255);
-  text(currentMovieFrame + ":" + getCurrFrame() + "/" + getLastFrame(), 8, 15);
-  text(frameCounters[PARTIAL_COUNTER] + "/" + frameCounters[FULL_COUNTER], 8, frame.height + 15);
+  //image(frame, 0, 0);
 
-  currentMovieFrame++;
-  if (currentMovieFrame>getLastFrame()) {
-    println(millis()-totalTime);
-    noLoop();
-  }
+  //fill(0, 100);
+  //noStroke();
+  //rect(0, 0, frame.width, 45);
+  //rect(0, frame.height, frame.width, 45);
 }
 
 void sendFrameToRunway() {
@@ -130,10 +110,10 @@ void sendFrameToRunway() {
 
 void drawPoseNetParts(JSONObject data) {
 
-  fill(0, 50);
+  fill(0, 80);
   noStroke();
   rect(0, frame.height, frame.width, frame.height);
- 
+
   stroke(255);
   strokeWeight(2);
 
@@ -156,57 +136,6 @@ void drawPoseNetParts(JSONObject data) {
 
 
 
-/*
-
- .88b  d88.  .d88b.  db    db d888888b d88888b
- 88'YbdP`88 .8P  Y8. 88    88   `88'   88'
- 88  88  88 88    88 Y8    8P    88    88ooooo
- 88  88  88 88    88 `8b  d8'    88    88~~~~~
- 88  88  88 `8b  d8'  `8bd8'    .88.   88.
- YP  YP  YP  `Y88P'     YP    Y888888P Y88888P
- 
- */
-
-void movieEvent(Movie m) {
-  m.read();
-}
-
-
-
-/*
-
- d88888b d8888b.  .d8b.  .88b  d88. d88888b
- 88'     88  `8D d8' `8b 88'YbdP`88 88'
- 88ooo   88oobY' 88ooo88 88  88  88 88ooooo
- 88~~~   88`8b   88~~~88 88  88  88 88~~~~~
- 88      88 `88. 88   88 88  88  88 88.
- YP      88   YD YP   YP YP  YP  YP Y88888P
- 
- */
-
-void gotoFrame(int n) {
-
-  movie.play();
-
-  float frameDuration = 1.0 / movie.frameRate;
-  float where = (n + 0.5) * frameDuration; 
-  float diff = movie.duration() - where;
-  if (diff < 0) {
-    where += diff - 0.25 * frameDuration;
-  }
-
-  movie.jump(where);
-  movie.pause();
-}  
-
-int getCurrFrame() {
-  return ceil(movie.time() * movie.frameRate) - 1;
-}
-
-int getLastFrame() {
-  return int(movie.duration() * movie.frameRate);
-}
-
 
 
 /*
@@ -221,13 +150,9 @@ int getLastFrame() {
  */
 
 void runwayDataEvent(JSONObject runwayData) {
-
-  frameCounters[FULL_COUNTER]++;
-
   if (runwayData.getJSONArray("scores").size() > 0) {
-    frameCounters[PARTIAL_COUNTER]++;
     drawPoseNetParts(runwayData);
-  } 
+  }
 }
 
 public void runwayInfoEvent(JSONObject info) {
@@ -236,4 +161,11 @@ public void runwayInfoEvent(JSONObject info) {
 
 public void runwayErrorEvent(String message) {
   println(message);
+}
+
+
+
+
+public String getFilename(int index) {
+  return BASEFOLDER + "/" + BASENAME + "_" + nf(fileCounter, 5) + "." + EXTENSION;
 }

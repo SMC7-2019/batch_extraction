@@ -44,7 +44,7 @@ int[] torso = {
 RunwayHTTP runway;
 
 PImage frame;
-int fileOffset = 401;
+int firstFile = 55;
 int fileCounter = 0;
 int skippedCounter = 0;
 
@@ -67,13 +67,13 @@ void setup() {
 
 void draw() {
 
-  String filename = getFilename(fileCounter + fileOffset);
+  String filename = getFilename(fileCounter + firstFile);
   frame = loadImage(filename);
 
   if (frame == null) {
     noLoop();
-    fullData.setInt("videoStart", fileOffset);
-    fullData.setInt("videoEnd", fileOffset+fileCounter-1);
+    fullData.setInt("videoStart", firstFile);
+    fullData.setInt("videoEnd", firstFile+fileCounter-1);
     fullData.setInt("totalFrames", fileCounter);
     fullData.setInt("frameRate", FRAMERATE);
     fullData.setJSONArray("frames", framesData);
@@ -90,7 +90,7 @@ void draw() {
   rect(0, 0, frame.width, 45);
 
   fill(255);
-  text("Frame " + (fileCounter + fileOffset) + "  (" + nf(frameRate, 0, 1)  + "fps)", 8, 18);
+  text("Frame " + (fileCounter + firstFile) + "  (" + nf(frameRate, 0, 1)  + "fps)", 8, 18);
   text("Skipped " + skippedCounter + " ("+ (nf((100.0*skippedCounter/(fileCounter+1)),0,2)) + "%)", 8, 36);
 
   fileCounter++;
@@ -108,38 +108,9 @@ void sendFrameToRunway() {
   runway.query(input.toString());
 }
 
-
-
-//void fileSelected(File selection) {
-//  if (selection == null) {
-//    println("Window was closed or the user hit cancel.");
-//  } else {
-//    println("User selected " + selection.getAbsolutePath());
-//    // load image
-//    image = loadImage(selection.getAbsolutePath());
-//    // resize sketch
-//    surface.setSize(image.width,image.height);
-//    // send image to Runway
-//    runway.query(image);
-//  }
-//}
-
-
-
-/*
-
- d8888b.  .d88b.  .d8888. d88888b d8b   db d88888b d888888b
- 88  `8D .8P  Y8. 88'  YP 88'     888o  88 88'     `~~88~~'
- 88oodD' 88    88 `8bo.   88ooooo 88V8o 88 88ooooo    88
- 88~~~   88    88   `Y8b. 88~~~~~ 88 V8o88 88~~~~~    88
- 88      `8b  d8' db   8D 88.     88  V888 88.        88
- 88       `Y88P'  `8888Y' Y88888P VP   V8P Y88888P    YP
- 
- */
-
-void drawPoseNetParts(JSONObject data) {
+void drawParts(JSONObject data) {
   
-  fill(0, 170);
+  fill(0, 70);
   noStroke();
   rect(0, frame.height, frame.width, frame.height);
 
@@ -161,14 +132,6 @@ void drawPoseNetParts(JSONObject data) {
     line(startX, startY, endX, endY);
   }
 
-  //PVector torsoCenter = new PVector(0, 0);
-  //for (int i = 0; i < torso.length; i++) {
-  //  JSONArray part = keypoints.getJSONArray(torso[i]);
-  //  torsoCenter.add(part.getFloat(0), part.getFloat(1));
-  //}  
-  //torsoCenter.div(torso.length);
-
-
   JSONArray head = data.getJSONArray("head");
   ellipse(head.getFloat(0)* frame.width, head.getFloat(1)* frame.height + frame.height, 15, 20);
 
@@ -179,7 +142,19 @@ void drawPoseNetParts(JSONObject data) {
   circle(torso.getFloat(0)* frame.width, torso.getFloat(1)* frame.height + frame.height, 12);
 }
 
-
+//void fileSelected(File selection) {
+//  if (selection == null) {
+//    println("Window was closed or the user hit cancel.");
+//  } else {
+//    println("User selected " + selection.getAbsolutePath());
+//    // load image
+//    image = loadImage(selection.getAbsolutePath());
+//    // resize sketch
+//    surface.setSize(image.width,image.height);
+//    // send image to Runway
+//    runway.query(image);
+//  }
+//}
 
 
 
@@ -209,7 +184,7 @@ void runwayDataEvent(JSONObject runwayData) {
     frameData.setFloat("score", runwayData.getJSONArray("scores").getFloat(0));
     frameData.setJSONArray("data", runwayData.getJSONArray("poses").getJSONArray(0));
 
-    drawPoseNetParts(frameData);
+    drawParts(frameData);
   } else {
     //TODO: INterpolate features, torso and head
     frameData.setBoolean("interpolation", true);
@@ -218,9 +193,9 @@ void runwayDataEvent(JSONObject runwayData) {
   }
 
   frameData.setFloat("timeRel", fileCounter/float(FRAMERATE));
-  frameData.setFloat("timeAbs", (fileCounter + fileOffset)/float(FRAMERATE));
+  frameData.setFloat("timeAbs", (fileCounter + firstFile)/float(FRAMERATE));
   frameData.setInt("frameRel", fileCounter);
-  frameData.setInt("frameAbs", fileCounter + fileOffset);
+  frameData.setInt("frameAbs", fileCounter + firstFile);
   framesData.setJSONObject(fileCounter, frameData);
 }
 
@@ -233,6 +208,17 @@ public void runwayErrorEvent(String message) {
 }
 
 
+
+/*
+
+db   db d88888b db      d8888b. d88888b d8888b. .d8888.
+88   88 88'     88      88  `8D 88'     88  `8D 88'  YP
+88ooo88 88ooooo 88      88oodD' 88ooooo 88oobY' `8bo.
+88~~~88 88~~~~~ 88      88~~~   88~~~~~ 88`8b     `Y8b.
+88   88 88.     88booo. 88      88.     88 `88. db   8D
+YP   YP Y88888P Y88888P 88      Y88888P 88   YD `8888Y'
+
+*/
 
 JSONArray getCenter(int[] markers, JSONObject data) {
 
@@ -253,7 +239,6 @@ JSONArray getCenter(int[] markers, JSONObject data) {
 
   return center;
 }
-
 
 public String getFilename(int index) {
   return BASEFOLDER + "/" + BASENAME + "_" + nf(index, 5) + "." + EXTENSION;

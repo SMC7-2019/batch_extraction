@@ -46,6 +46,7 @@ RunwayHTTP runway;
 PImage frame;
 int fileOffset = 401;
 int fileCounter = 0;
+int skippedCounter = 0;
 
 JSONObject fullData;
 JSONArray framesData;
@@ -54,7 +55,7 @@ void setup() {
 
   size(600, 800);
   background(0);
-  textSize(16);
+  textSize(15);
   frameRate(60);
 
   fullData = new JSONObject();
@@ -76,6 +77,7 @@ void draw() {
     fullData.setInt("totalFrames", fileCounter);
     fullData.setInt("frameRate", FRAMERATE);
     fullData.setJSONArray("frames", framesData);
+    fullData.setInt("skipped", skippedCounter);
     saveJSONObject(fullData, "data/"+BASENAME+".json");
     return;
   }
@@ -88,7 +90,8 @@ void draw() {
   rect(0, 0, frame.width, 45);
 
   fill(255);
-  text("Frame " + (fileCounter + fileOffset) + "  (" + nf(frameRate, 0, 1)  + "fps)", 8, 25);
+  text("Frame " + (fileCounter + fileOffset) + "  (" + nf(frameRate, 0, 1)  + "fps)", 8, 18);
+  text("Skipped " + skippedCounter + " ("+ (nf((100.0*skippedCounter/(fileCounter+1)),0,2)) + "%)", 8, 36);
 
   fileCounter++;
 }
@@ -211,6 +214,7 @@ void runwayDataEvent(JSONObject runwayData) {
     //TODO: INterpolate features, torso and head
     frameData.setBoolean("interpolation", true);
     frameData.setFloat("score", 0);
+    skippedCounter++;
   }
 
   frameData.setFloat("timeRel", fileCounter/float(FRAMERATE));

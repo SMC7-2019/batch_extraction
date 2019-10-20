@@ -50,6 +50,7 @@ int skippedCounter = 0;
 
 JSONObject fullData;
 JSONArray framesData;
+float maxSpan = -1;
 
 void setup() {
 
@@ -57,6 +58,7 @@ void setup() {
   background(0);
   textSize(15);
   frameRate(60);
+  //pixelDensity(2);
 
   fullData = new JSONObject();
   framesData = new JSONArray();
@@ -78,6 +80,7 @@ void draw() {
     fullData.setInt("frameRate", FRAMERATE);
     fullData.setJSONArray("frames", framesData);
     fullData.setInt("skipped", skippedCounter);
+    fullData.setFloat("maxSpan", maxSpan);
     saveJSONObject(fullData, "data/"+BASENAME+".json");
     return;
   }
@@ -91,7 +94,8 @@ void draw() {
 
   fill(255);
   text("Frame " + (fileCounter + firstFile) + "  (" + nf(frameRate, 0, 1)  + "fps)", 8, 18);
-  text("Skipped " + skippedCounter + " ("+ (nf((100.0*skippedCounter/(fileCounter+1)),0,2)) + "%)", 8, 36);
+  text("Skipped: " + skippedCounter + " ("+ (nf((100.0*skippedCounter/(fileCounter+1)), 0, 2)) + "%)", 8+frame.width/2, 18);
+  text("Max. span: " + maxSpan, 8, 35);
 
   fileCounter++;
 }
@@ -109,13 +113,16 @@ void sendFrameToRunway() {
 }
 
 void drawParts(JSONObject data) {
-  
-  fill(0, 70);
+
+  fill(0, 110);
   noStroke();
   rect(0, frame.height, frame.width, frame.height);
 
   stroke(255);
   strokeWeight(2);
+
+  JSONArray head = data.getJSONArray("head");
+  JSONArray torso = data.getJSONArray("torso");
 
   JSONArray keypoints = data.getJSONArray("data");
 
@@ -132,13 +139,23 @@ void drawParts(JSONObject data) {
     line(startX, startY, endX, endY);
   }
 
-  JSONArray head = data.getJSONArray("head");
   ellipse(head.getFloat(0)* frame.width, head.getFloat(1)* frame.height + frame.height, 15, 20);
 
+  JSONArray startPart = keypoints.getJSONArray(ModelUtils.POSE_RIGHT_WRIST_INDEX);
+  float startX = startPart.getFloat(0) * frame.width;
+  float startY = startPart.getFloat(1) * frame.height + frame.height;
+
+  stroke(#3262b5);
+  line(startX, startY, torso.getFloat(0)* frame.width, torso.getFloat(1)* frame.height + frame.height);
+
+  startPart = keypoints.getJSONArray(ModelUtils.POSE_LEFT_WRIST_INDEX);
+  startX = startPart.getFloat(0) * frame.width;
+  startY = startPart.getFloat(1) * frame.height + frame.height;
+
+  line(startX, startY, torso.getFloat(0)* frame.width, torso.getFloat(1)* frame.height + frame.height);
+
   noStroke();
-  fill(175, 75, 0);
-  
-  JSONArray torso = data.getJSONArray("torso");
+  fill(#e03854);
   circle(torso.getFloat(0)* frame.width, torso.getFloat(1)* frame.height + frame.height, 12);
 }
 
@@ -174,18 +191,33 @@ void runwayDataEvent(JSONObject runwayData) {
   JSONObject frameData = new JSONObject();
 
   if (runwayData.getJSONArray("scores").size() > 0) {
-    
-    //println(runwayData.getJSONArray("poses"));
 
-    frameData.setJSONArray("torso", getCenter(torso, runwayData));
+    JSONArray torsoJSON = getCenter(torso, runwayData);
+    PVector torsoPVector = new PVector(torsoJSON.getFloat(0), torsoJSON.getFloat(1));
+    frameData.setJSONArray("torso", torsoJSON);
+
+    JSONArray leftWristJSON = runwayData.getJSONArray("poses").getJSONArray(0).getJSONArray(ModelUtils.POSE_LEFT_WRIST_INDEX);
+    JSONArray rightWristJSON = runwayData.getJSONArray("poses").getJSONArray(0).getJSONArray(ModelUtils.POSE_RIGHT_WRIST_INDEX);
+
     frameData.setJSONArray("head", getCenter(head, runwayData));
 
     frameData.setBoolean("interpolation", false);
     frameData.setFloat("score", runwayData.getJSONArray("scores").getFloat(0));
     frameData.setJSONArray("data", runwayData.getJSONArray("poses").getJSONArray(0));
 
+    float currSpan = torsoPVector.dist(new PVector(leftWristJSON.getFloat(0), leftWristJSON.getFloat(1)));
+    if (currSpan > maxSpan) {
+      maxSpan = currSpan;
+    }
+
+    currSpan = torsoPVector.dist(new PVector(rightWristJSON.getFloat(0), rightWristJSON.getFloat(1)));
+    if (currSpan > maxSpan) {
+      maxSpan = currSpan;
+    }    
+
     drawParts(frameData);
-  } else {
+
+} else {
     //TODO: INterpolate features, torso and head
     frameData.setBoolean("interpolation", true);
     frameData.setFloat("score", 0);
@@ -211,14 +243,14 @@ public void runwayErrorEvent(String message) {
 
 /*
 
-db   db d88888b db      d8888b. d88888b d8888b. .d8888.
-88   88 88'     88      88  `8D 88'     88  `8D 88'  YP
-88ooo88 88ooooo 88      88oodD' 88ooooo 88oobY' `8bo.
-88~~~88 88~~~~~ 88      88~~~   88~~~~~ 88`8b     `Y8b.
-88   88 88.     88booo. 88      88.     88 `88. db   8D
-YP   YP Y88888P Y88888P 88      Y88888P 88   YD `8888Y'
-
-*/
+ db   db d88888b db      d8888b. d88888b d8888b. .d8888.
+ 88   88 88'     88      88  `8D 88'     88  `8D 88'  YP
+ 88ooo88 88ooooo 88      88oodD' 88ooooo 88oobY' `8bo.
+ 88~~~88 88~~~~~ 88      88~~~   88~~~~~ 88`8b     `Y8b.
+ 88   88 88.     88booo. 88      88.     88 `88. db   8D
+ YP   YP Y88888P Y88888P 88      Y88888P 88   YD `8888Y'
+ 
+ */
 
 JSONArray getCenter(int[] markers, JSONObject data) {
 

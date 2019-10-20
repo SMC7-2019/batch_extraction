@@ -1,0 +1,65 @@
+videoStart
+int - first processed frame
+
+videoEnd
+int - last processed frame
+
+totalFrames
+int - total processed frames (videoEnd - videoStart + 1)
+
+frameRate
+float - frames per second
+
+skkiped
+int - number of skipeed frames (no pose detected)
+
+maxSpan
+float - max distance (normalized) between wrists and torso center
+
+frames
+array - description for each frame
+
+    score
+    float - scored returned by runway (0 means no pose detected)
+
+    interpolation
+    boolean - true when no pose detected by runway
+
+    framRel
+    int - frame index from start of batch
+
+    timeRel
+    float - frame time (frameRel / fps) from start of batch 
+
+    framAbs
+    int - frame index from start of video
+
+    timeAbs
+    float - frame time (frameAbs / fps) from start of video
+
+    head
+    [float, float] - XY coordinates of the center of the head (average of eyes,ears and mouth) This field only appears if interpolation == false 
+
+    torso
+    [float, float] - XY coordinates of the center of the torso (average of hip and shoulders) This field only appears if interpolation == false  
+
+    data
+    array of [float, float] - XY coordinates of each joint. This field only appears if interpolation == false. The joint order is: 
+
+    public static int POSE_NOSE_INDEX           =  0;
+    public static int POSE_LEFT_EYE_INDEX       =  1;
+    public static int POSE_RIGHT_EYE_INDEX      =  2;
+    public static int POSE_LEFT_EAR_INDEX       =  3;
+    public static int POSE_RIGHT_EAR_INDEX      =  4;
+    public static int POSE_LEFT_SHOULDER_INDEX  =  5;
+    public static int POSE_RIGHT_SHOULDER_INDEX =  6;
+    public static int POSE_LEFT_ELBOW_INDEX     =  7;
+    public static int POSE_RIGHT_ELBOW_INDEX    =  8;
+    public static int POSE_LEFT_WRIST_INDEX     =  9;
+    public static int POSE_RIGHT_WRIST_INDEX    = 10;
+    public static int POSE_LEFT_HIP_INDEX       = 11;
+    public static int POSE_RIGHT_HIP_INDEX      = 12;
+    public static int POSE_LEFT_KNEE_INDEX      = 13;
+    public static int POSE_RIGHT_KNEE_INDEX     = 14;
+    public static int POSE_LEFT_ANKLE_INDEX     = 15;
+    public static int POSE_RIGHT_ANKLE_INDEX    = 16;      

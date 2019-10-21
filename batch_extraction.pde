@@ -44,7 +44,7 @@ int[] torso = {
 RunwayHTTP runway;
 
 PImage frame;
-int firstFile = 55;
+int firstFile = 1;
 int fileCounter = 0;
 int skippedCounter = 0;
 
@@ -119,44 +119,52 @@ void drawParts(JSONObject data) {
   rect(0, frame.height, frame.width, frame.height);
 
   stroke(255);
-  strokeWeight(2);
+
 
   JSONArray head = data.getJSONArray("head");
   JSONArray torso = data.getJSONArray("torso");
 
   JSONArray keypoints = data.getJSONArray("data");
 
+  pushMatrix();
+  scale(frame.width, frame.height);  
+  translate(torso.getFloat(0), torso.getFloat(1)*3);
+
+  //WTF, Processing
+  strokeWeight(0.003);
+
   for (int i = 0; i < connections.length; i++) {
 
     JSONArray startPart = keypoints.getJSONArray(connections[i][0]);
     JSONArray endPart   = keypoints.getJSONArray(connections[i][1]);
-    // extract floats fron JSON array and scale normalized value to sketch size
-    float startX = startPart.getFloat(0) * frame.width;
-    float startY = startPart.getFloat(1) * frame.height + frame.height;
-    float endX   = endPart.getFloat(0) * frame.width;
-    float endY   = endPart.getFloat(1) * frame.height + frame.height;
+    float startX = startPart.getFloat(0);
+    float startY = startPart.getFloat(1);
+    float endX   = endPart.getFloat(0);
+    float endY   = endPart.getFloat(1);
 
     line(startX, startY, endX, endY);
   }
 
-  ellipse(head.getFloat(0)* frame.width, head.getFloat(1)* frame.height + frame.height, 15, 20);
+  ellipse(head.getFloat(0), head.getFloat(1), 15.0/frame.width, 20.0/frame.height);
 
   JSONArray startPart = keypoints.getJSONArray(ModelUtils.POSE_RIGHT_WRIST_INDEX);
-  float startX = startPart.getFloat(0) * frame.width;
-  float startY = startPart.getFloat(1) * frame.height + frame.height;
+  float startX = startPart.getFloat(0);
+  float startY = startPart.getFloat(1);
 
   stroke(#3262b5);
-  line(startX, startY, torso.getFloat(0)* frame.width, torso.getFloat(1)* frame.height + frame.height);
+  line(startX, startY, 0, 0);
 
   startPart = keypoints.getJSONArray(ModelUtils.POSE_LEFT_WRIST_INDEX);
-  startX = startPart.getFloat(0) * frame.width;
-  startY = startPart.getFloat(1) * frame.height + frame.height;
+  startX = startPart.getFloat(0);
+  startY = startPart.getFloat(1);
 
-  line(startX, startY, torso.getFloat(0)* frame.width, torso.getFloat(1)* frame.height + frame.height);
+  line(startX, startY, 0, 0);
 
   noStroke();
   fill(#e03854);
-  circle(torso.getFloat(0)* frame.width, torso.getFloat(1)* frame.height + frame.height, 12);
+  ellipse(0, 0, 12.0/frame.width, 12.0/frame.height);
+  
+  popMatrix();
 }
 
 //void fileSelected(File selection) {
@@ -192,33 +200,50 @@ void runwayDataEvent(JSONObject runwayData) {
 
   if (runwayData.getJSONArray("scores").size() > 0) {
 
-    JSONArray torsoJSON = getCenter(torso, runwayData);
-    PVector torsoPVector = new PVector(torsoJSON.getFloat(0), torsoJSON.getFloat(1));
-    frameData.setJSONArray("torso", torsoJSON);
+    JSONArray mainPose = runwayData.getJSONArray("poses").getJSONArray(0);
 
-    JSONArray leftWristJSON = runwayData.getJSONArray("poses").getJSONArray(0).getJSONArray(ModelUtils.POSE_LEFT_WRIST_INDEX);
-    JSONArray rightWristJSON = runwayData.getJSONArray("poses").getJSONArray(0).getJSONArray(ModelUtils.POSE_RIGHT_WRIST_INDEX);
+    JSONArray torsoCenter = getCenter(torso, mainPose);
+    PVector torsoVector = new PVector(torsoCenter.getFloat(0), torsoCenter.getFloat(1));
 
-    frameData.setJSONArray("head", getCenter(head, runwayData));
+    //We use these to calculate the span, so we don't need to center them 
+    JSONArray leftWrist = mainPose.getJSONArray(ModelUtils.POSE_LEFT_WRIST_INDEX);
+    JSONArray rightWrist = mainPose.getJSONArray(ModelUtils.POSE_RIGHT_WRIST_INDEX);
 
-    frameData.setBoolean("interpolation", false);
-    frameData.setFloat("score", runwayData.getJSONArray("scores").getFloat(0));
-    frameData.setJSONArray("data", runwayData.getJSONArray("poses").getJSONArray(0));
-
-    float currSpan = torsoPVector.dist(new PVector(leftWristJSON.getFloat(0), leftWristJSON.getFloat(1)));
+    float currSpan = torsoVector.dist(new PVector(leftWrist.getFloat(0), leftWrist.getFloat(1)));
     if (currSpan > maxSpan) {
       maxSpan = currSpan;
     }
 
-    currSpan = torsoPVector.dist(new PVector(rightWristJSON.getFloat(0), rightWristJSON.getFloat(1)));
+    currSpan = torsoVector.dist(new PVector(rightWrist.getFloat(0), rightWrist.getFloat(1)));
     if (currSpan > maxSpan) {
       maxSpan = currSpan;
-    }    
+    }  
+
+    //Translate the head
+    JSONArray headCenter = getCenter(head, mainPose);
+    JSONArray headCentered = new JSONArray();
+    headCentered.setFloat(0, headCenter.getFloat(0) - torsoVector.x);
+    headCentered.setFloat(1, headCenter.getFloat(1) - torsoVector.y);
+
+    //Translate the joints
+    JSONArray centeredPose = new JSONArray();
+    for (int f=0; f<mainPose.size(); f++) {
+      JSONArray joint = mainPose.getJSONArray(f);
+      JSONArray jointCentered = new JSONArray();
+      jointCentered.setFloat(0, joint.getFloat(0) - torsoVector.x);
+      jointCentered.setFloat(1, joint.getFloat(1) - torsoVector.y);
+      centeredPose.setJSONArray(f, jointCentered);
+    }
+
+    frameData.setBoolean("interpolation", false);
+    frameData.setFloat("score", runwayData.getJSONArray("scores").getFloat(0));
+    frameData.setJSONArray("torso", torsoCenter);    
+    frameData.setJSONArray("head", headCentered);
+    frameData.setJSONArray("data", centeredPose);
 
     drawParts(frameData);
-
-} else {
-    //TODO: INterpolate features, torso and head
+  } else {
+    //TODO: Interpolate features, torso and head
     frameData.setBoolean("interpolation", true);
     frameData.setFloat("score", 0);
     skippedCounter++;
@@ -252,16 +277,13 @@ public void runwayErrorEvent(String message) {
  
  */
 
-JSONArray getCenter(int[] markers, JSONObject data) {
+JSONArray getCenter(int[] markers, JSONArray data) {
 
   JSONArray center = new JSONArray();
 
-  JSONArray human = data.getJSONArray("poses");
-  JSONArray keypoints = human.getJSONArray(0);
-
   PVector vCenter = new PVector(0, 0);
   for (int i = 0; i < markers.length; i++) {
-    JSONArray part = keypoints.getJSONArray(markers[i]);
+    JSONArray part = data.getJSONArray(markers[i]);
     vCenter.add(part.getFloat(0), part.getFloat(1));
   }  
   vCenter.div(markers.length);   

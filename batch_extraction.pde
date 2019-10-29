@@ -3,9 +3,14 @@ import com.runwayml.*;
 float SCORE_THRESHOLD = 0.6;
 
 String BASEFOLDER = "output";
-String BASENAME = "plum";
-String EXTENSION = "png";
-int    FRAMERATE = 30;
+String  EXTENSION = "png";
+
+String framesFolder=BASEFOLDER + "/frames";
+String jsonFolder="data/" + BASEFOLDER + "/json";
+
+int     FRAMERATE = 30;
+int  CLIPDURATION = 8;
+int FRAMESPERCLIP = FRAMERATE * CLIPDURATION;
 
 int[][] connections = {
   {ModelUtils.POSE_RIGHT_EYE_INDEX, ModelUtils.POSE_LEFT_EYE_INDEX}, 
@@ -44,13 +49,13 @@ int[] torso = {
 RunwayHTTP runway;
 
 PImage frame;
-int firstFile = 1;
-int fileCounter = 0;
-int skippedCounter = 0;
+int currentFrame;
+int currentClip;
+int skippedCounter;
 
 JSONObject fullData;
 JSONArray framesData;
-float maxSpan = -1;
+float maxSpan;
 
 void setup() {
 
@@ -58,10 +63,9 @@ void setup() {
   background(0);
   textSize(15);
   frameRate(60);
-  //pixelDensity(2);
 
-  fullData = new JSONObject();
-  framesData = new JSONArray();
+  currentClip=-1;
+  initBatch();
 
   runway = new RunwayHTTP(this);
   runway.setAutoUpdate(false);
@@ -69,19 +73,11 @@ void setup() {
 
 void draw() {
 
-  String filename = getFilename(fileCounter + firstFile);
+  String filename = getFilename(FRAMESPERCLIP * currentClip + currentFrame);
   frame = loadImage(filename);
 
   if (frame == null) {
     noLoop();
-    fullData.setInt("videoStart", firstFile);
-    fullData.setInt("videoEnd", firstFile+fileCounter-1);
-    fullData.setInt("totalFrames", fileCounter);
-    fullData.setInt("frameRate", FRAMERATE);
-    fullData.setJSONArray("frames", framesData);
-    fullData.setInt("skipped", skippedCounter);
-    fullData.setFloat("maxSpan", maxSpan);
-    saveJSONObject(fullData, "data/"+BASENAME+".json");
     return;
   }
 
@@ -93,11 +89,24 @@ void draw() {
   rect(0, 0, frame.width, 45);
 
   fill(255);
-  text("Frame " + (fileCounter + firstFile) + "  (" + nf(frameRate, 0, 1)  + "fps)", 8, 18);
-  text("Skipped: " + skippedCounter + " ("+ (nf((100.0*skippedCounter/(fileCounter+1)), 0, 2)) + "%)", 8+frame.width/2, 18);
+  text("Clip " + currentClip + "  Frame " + currentFrame + "  (" + nf(frameRate, 0, 1)  + "fps)", 8, 18);
+  text("Skipped: " + skippedCounter + " ("+ (nf((100.0*skippedCounter/FRAMESPERCLIP), 0, 2)) + "%)", 8+frame.width/2, 18);
   text("Max. span: " + maxSpan, 8, 35);
 
-  fileCounter++;
+  currentFrame++;
+
+  if (currentFrame >= FRAMESPERCLIP) {
+    fullData.setInt("videoStart", FRAMESPERCLIP * currentClip);
+    fullData.setInt("videoEnd", FRAMESPERCLIP * (currentClip+1) - 1);
+    fullData.setInt("totalFrames", FRAMESPERCLIP);
+    fullData.setInt("frameRate", FRAMERATE);
+    fullData.setJSONArray("frames", framesData);
+    fullData.setInt("skipped", skippedCounter);
+    fullData.setFloat("maxSpan", maxSpan);
+    saveJSONObject(fullData, jsonFolder+"/json_"+nf(currentClip, 5)+".json");
+    println(jsonFolder+"/json_"+nf(currentClip, 5)+".json");
+    initBatch();
+  }
 }
 
 void sendFrameToRunway() {
@@ -163,7 +172,7 @@ void drawParts(JSONObject data) {
   noStroke();
   fill(#e03854);
   ellipse(0, 0, 12.0/frame.width, 12.0/frame.height);
-  
+
   popMatrix();
 }
 
@@ -249,11 +258,11 @@ void runwayDataEvent(JSONObject runwayData) {
     skippedCounter++;
   }
 
-  frameData.setFloat("timeRel", fileCounter/float(FRAMERATE));
-  frameData.setFloat("timeAbs", (fileCounter + firstFile)/float(FRAMERATE));
-  frameData.setInt("frameRel", fileCounter);
-  frameData.setInt("frameAbs", fileCounter + firstFile);
-  framesData.setJSONObject(fileCounter, frameData);
+  frameData.setFloat("timeRel", currentFrame/float(FRAMERATE));
+  //frameData.setFloat("timeAbs", (fileCounter + firstFile)/float(FRAMERATE));
+  frameData.setInt("frameRel", currentFrame);
+  //frameData.setInt("frameAbs", fileCounter + firstFile);
+  framesData.setJSONObject(currentFrame, frameData);
 }
 
 public void runwayInfoEvent(JSONObject info) {
@@ -295,5 +304,14 @@ JSONArray getCenter(int[] markers, JSONArray data) {
 }
 
 public String getFilename(int index) {
-  return BASEFOLDER + "/" + BASENAME + "_" + nf(index, 5) + "." + EXTENSION;
+  return BASEFOLDER + "/frames/frame_" + nf(index, 5) + "." + EXTENSION;
+}
+
+public void initBatch() {
+  fullData = new JSONObject();
+  framesData = new JSONArray();
+  maxSpan = -1;
+  currentClip++;
+  currentFrame=0;
+  skippedCounter=0;
 }

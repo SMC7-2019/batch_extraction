@@ -9,8 +9,8 @@ String      STYLE = "ballet";
 String framesFolder=BASEFOLDER + "/frames";
 String jsonFolder="data/" + BASEFOLDER + "/json";
 
-int     FRAMERATE = 30;
-int  CLIPDURATION = 8;
+int     FRAMERATE = 25;
+int  CLIPDURATION = 4;
 int FRAMESPERCLIP = FRAMERATE * CLIPDURATION;
 int   UNAVAILABLE = 15; //If the clip has UNAVAILABLE or more blank frames, skip it
 
@@ -55,6 +55,7 @@ int currentFrame;
 int currentClip;
 int skippedCounter;
 int unavailableCounter;
+int lastRealFrame;
 
 JSONObject fullData;
 JSONArray framesData;
@@ -67,7 +68,7 @@ void setup() {
   textSize(15);
   frameRate(60);
 
-  currentClip=-1;
+  currentClip=1;
   initBatch();
 
   runway = new RunwayHTTP(this);
@@ -96,7 +97,7 @@ void draw() {
   text("Skipped: " + skippedCounter + " ("+ (nf((100.0*skippedCounter/FRAMESPERCLIP), 0, 2)) + "%)", 8+frame.width/2, 18);
   text("Max. span: " + maxSpan, 8, 35);
 
-  if (unavailableCounter >= UNAVAILABLE) {
+  if ((unavailableCounter >= UNAVAILABLE) || (currentFrame==0 && unavailableCounter>0)) {
     println("Skipping clip " + currentClip);
     initBatch();
     return;
@@ -114,7 +115,7 @@ void draw() {
     fullData.setFloat("maxSpan", maxSpan);
     fullData.setString("style", STYLE);
     saveJSONObject(fullData, jsonFolder+"/json_"+nf(currentClip, 5)+".json");
-    println(jsonFolder+"/json_"+nf(currentClip, 5)+".json");
+    //println(jsonFolder+"/json_"+nf(currentClip, 5)+".json");
     initBatch();
   }
 }
@@ -219,8 +220,6 @@ void runwayDataEvent(JSONObject runwayData) {
 
   if (runwayData.getJSONArray("scores").size() > 0) {
 
-    unavailableCounter = 0;
-
     JSONArray mainPose = runwayData.getJSONArray("poses").getJSONArray(0);
 
     JSONArray torsoCenter = getCenter(torso, mainPose);
@@ -263,6 +262,35 @@ void runwayDataEvent(JSONObject runwayData) {
     frameData.setJSONArray("data", centeredPose);
 
     drawParts(frameData);
+
+    if (unavailableCounter>0) {
+
+      println("Interpolate "+(currentFrame-lastRealFrame-1)+" frames between " + lastRealFrame + " and " + currentFrame);
+
+      JSONObject startFrame = framesData.getJSONObject(lastRealFrame);
+      JSONObject endFrame = frameData;
+
+      //-- Torso ----------------------------------------------------
+      JSONArray startTorso = startFrame.getJSONArray("torso");
+      JSONArray endTorso = endFrame.getJSONArray("torso");
+      for (int f=1; f<(currentFrame-lastRealFrame); f++) {
+        JSONObject interpFrame = framesData.getJSONObject(lastRealFrame+f);
+        interpFrame.setJSONArray("torso", interpolateFeature(startTorso, endTorso, f, currentFrame-lastRealFrame));
+        framesData.setJSONObject(lastRealFrame+f, interpFrame);
+      }
+
+      //-- Head ----------------------------------------------------
+      JSONArray startHead = startFrame.getJSONArray("head");
+      JSONArray endHead = endFrame.getJSONArray("head");
+      for (int f=1; f<(currentFrame-lastRealFrame); f++) {
+        JSONObject interpFrame = framesData.getJSONObject(lastRealFrame+f);
+        interpFrame.setJSONArray("head", interpolateFeature(startHead, endHead, f, currentFrame-lastRealFrame));
+        framesData.setJSONObject(lastRealFrame+f, interpFrame);
+      }
+    }
+
+    unavailableCounter = 0;
+    lastRealFrame = currentFrame;
   } else {
     //TODO: Interpolate features, torso and head
     frameData.setBoolean("interpolation", true);
@@ -328,4 +356,20 @@ public void initBatch() {
   currentFrame=0;
   skippedCounter=0;
   unavailableCounter=0;
+  lastRealFrame=0;
+}
+
+public JSONArray interpolateFeature (JSONArray startFeature, JSONArray endFeature, int currStep, int totalSteps) {
+
+  PVector start = new PVector(startFeature.getFloat(0), startFeature.getFloat(1));
+  PVector end = new PVector(endFeature.getFloat(0), endFeature.getFloat(1));
+  PVector delta = PVector.sub(end, start).div(totalSteps);
+
+  PVector interpData = PVector.add(start, PVector.mult(delta, currStep));
+
+  JSONArray interpCoords = new JSONArray();
+  interpCoords.setFloat(0, interpData.x);
+  interpCoords.setFloat(1, interpData.y); 
+
+  return interpCoords;
 }

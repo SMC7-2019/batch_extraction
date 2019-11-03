@@ -9,10 +9,10 @@ String      STYLE = "ballet";
 String framesFolder=BASEFOLDER + "/frames";
 String jsonFolder="data/" + BASEFOLDER + "/json";
 
-int     FRAMERATE = 25;
-int  CLIPDURATION = 4;
+int     FRAMERATE = 30;
+int  CLIPDURATION = 8;
 int FRAMESPERCLIP = FRAMERATE * CLIPDURATION;
-int   UNAVAILABLE = 15; //If the clip has UNAVAILABLE or more blank frames, skip it
+int   UNAVAILABLE = 20; //If the clip has UNAVAILABLE or more blank frames in a row, skip it
 
 int[][] connections = {
   {ModelUtils.POSE_RIGHT_EYE_INDEX, ModelUtils.POSE_LEFT_EYE_INDEX}, 
@@ -287,8 +287,20 @@ void runwayDataEvent(JSONObject runwayData) {
         interpFrame.setJSONArray("head", interpolateFeature(startHead, endHead, f, currentFrame-lastRealFrame));
         framesData.setJSONObject(lastRealFrame+f, interpFrame);
       }
-    }
 
+      //-- Data ---------------------------------------------------- 
+      JSONArray startData = startFrame.getJSONArray("data");
+      JSONArray endData = endFrame.getJSONArray("data"); 
+      for (int f=1; f<(currentFrame-lastRealFrame); f++) {
+        JSONArray jointsData = new JSONArray();
+        for (int i=0; i<startData.size(); i++) {
+          jointsData.setJSONArray(i, 
+            interpolateFeature(startData.getJSONArray(i), endData.getJSONArray(i), f, currentFrame-lastRealFrame));
+        }
+        JSONObject interpFrame = framesData.getJSONObject(lastRealFrame+f);
+        interpFrame.setJSONArray("data", jointsData);
+      }
+    }
     unavailableCounter = 0;
     lastRealFrame = currentFrame;
   } else {

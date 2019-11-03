@@ -4,6 +4,7 @@ float SCORE_THRESHOLD = 0.6;
 
 String BASEFOLDER = "output";
 String  EXTENSION = "png";
+String      STYLE = "ballet";
 
 String framesFolder=BASEFOLDER + "/frames";
 String jsonFolder="data/" + BASEFOLDER + "/json";
@@ -11,6 +12,7 @@ String jsonFolder="data/" + BASEFOLDER + "/json";
 int     FRAMERATE = 30;
 int  CLIPDURATION = 8;
 int FRAMESPERCLIP = FRAMERATE * CLIPDURATION;
+int   UNAVAILABLE = 15; //If the clip has UNAVAILABLE or more blank frames, skip it
 
 int[][] connections = {
   {ModelUtils.POSE_RIGHT_EYE_INDEX, ModelUtils.POSE_LEFT_EYE_INDEX}, 
@@ -52,6 +54,7 @@ PImage frame;
 int currentFrame;
 int currentClip;
 int skippedCounter;
+int unavailableCounter;
 
 JSONObject fullData;
 JSONArray framesData;
@@ -93,6 +96,12 @@ void draw() {
   text("Skipped: " + skippedCounter + " ("+ (nf((100.0*skippedCounter/FRAMESPERCLIP), 0, 2)) + "%)", 8+frame.width/2, 18);
   text("Max. span: " + maxSpan, 8, 35);
 
+  if (unavailableCounter >= UNAVAILABLE) {
+    println("Skipping clip " + currentClip);
+    initBatch();
+    return;
+  }
+
   currentFrame++;
 
   if (currentFrame >= FRAMESPERCLIP) {
@@ -103,6 +112,7 @@ void draw() {
     fullData.setJSONArray("frames", framesData);
     fullData.setInt("skipped", skippedCounter);
     fullData.setFloat("maxSpan", maxSpan);
+    fullData.setString("style", STYLE);
     saveJSONObject(fullData, jsonFolder+"/json_"+nf(currentClip, 5)+".json");
     println(jsonFolder+"/json_"+nf(currentClip, 5)+".json");
     initBatch();
@@ -209,6 +219,8 @@ void runwayDataEvent(JSONObject runwayData) {
 
   if (runwayData.getJSONArray("scores").size() > 0) {
 
+    unavailableCounter = 0;
+
     JSONArray mainPose = runwayData.getJSONArray("poses").getJSONArray(0);
 
     JSONArray torsoCenter = getCenter(torso, mainPose);
@@ -256,6 +268,7 @@ void runwayDataEvent(JSONObject runwayData) {
     frameData.setBoolean("interpolation", true);
     frameData.setFloat("score", 0);
     skippedCounter++;
+    unavailableCounter++;
   }
 
   frameData.setFloat("timeRel", currentFrame/float(FRAMERATE));
@@ -314,4 +327,5 @@ public void initBatch() {
   currentClip++;
   currentFrame=0;
   skippedCounter=0;
+  unavailableCounter=0;
 }

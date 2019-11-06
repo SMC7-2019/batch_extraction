@@ -13,6 +13,7 @@ int     FRAMERATE = 30;
 int  CLIPDURATION = 8;
 int FRAMESPERCLIP = FRAMERATE * CLIPDURATION;
 int   UNAVAILABLE = 20; //If the clip has UNAVAILABLE or more blank frames in a row, skip it
+float   SCALE_REF = 0.2;
 
 int[][] connections = {
   {ModelUtils.POSE_RIGHT_EYE_INDEX, ModelUtils.POSE_LEFT_EYE_INDEX}, 
@@ -48,6 +49,16 @@ int[] torso = {
   ModelUtils.POSE_LEFT_SHOULDER_INDEX, 
 };
 
+int[] shoulders = {
+  ModelUtils.POSE_RIGHT_SHOULDER_INDEX, 
+  ModelUtils.POSE_LEFT_SHOULDER_INDEX, 
+};
+
+int[] hip = {
+  ModelUtils.POSE_RIGHT_HIP_INDEX, 
+  ModelUtils.POSE_LEFT_HIP_INDEX, 
+};
+
 RunwayHTTP runway;
 
 PImage frame;
@@ -59,7 +70,7 @@ int lastRealFrame;
 
 JSONObject fullData;
 JSONArray framesData;
-float maxSpan;
+float maxSpan, spineLength, spineAngle;
 
 void setup() {
 
@@ -68,7 +79,7 @@ void setup() {
   textSize(15);
   frameRate(60);
 
-  currentClip=1;
+  currentClip=5;
   initBatch();
 
   runway = new RunwayHTTP(this);
@@ -96,6 +107,7 @@ void draw() {
   text("Clip " + currentClip + "  Frame " + currentFrame + "  (" + nf(frameRate, 0, 1)  + "fps)", 8, 18);
   text("Skipped: " + skippedCounter + " ("+ (nf((100.0*skippedCounter/FRAMESPERCLIP), 0, 2)) + "%)", 8+frame.width/2, 18);
   text("Max. span: " + maxSpan, 8, 35);
+  text("Spine angle: " + degrees(spineAngle), 8+frame.width/2, 35);
 
   if ((unavailableCounter >= UNAVAILABLE) || (currentFrame==0 && unavailableCounter>0)) {
     println("Skipping clip " + currentClip);
@@ -106,6 +118,13 @@ void draw() {
   currentFrame++;
 
   if (currentFrame >= FRAMESPERCLIP) {
+
+    if (unavailableCounter >0 )  {
+      println("Skipping clip " + currentClip + " at end");
+      initBatch();
+      return;
+    }
+
     fullData.setInt("videoStart", FRAMESPERCLIP * currentClip);
     fullData.setInt("videoEnd", FRAMESPERCLIP * (currentClip+1) - 1);
     fullData.setInt("totalFrames", FRAMESPERCLIP);
@@ -143,6 +162,8 @@ void drawParts(JSONObject data) {
 
   JSONArray head = data.getJSONArray("head");
   JSONArray torso = data.getJSONArray("torso");
+  JSONArray shoulders = data.getJSONArray("shoulders");
+  JSONArray hip = data.getJSONArray("hip");
 
   JSONArray keypoints = data.getJSONArray("data");
 
@@ -153,6 +174,10 @@ void drawParts(JSONObject data) {
   //WTF, Processing
   strokeWeight(0.003);
 
+  stroke(#00ff00);
+  line(shoulders.getFloat(0), shoulders.getFloat(1), hip.getFloat(0), hip.getFloat(1));
+
+  stroke(255);
   for (int i = 0; i < connections.length; i++) {
 
     JSONArray startPart = keypoints.getJSONArray(connections[i][0]);
@@ -225,6 +250,24 @@ void runwayDataEvent(JSONObject runwayData) {
     JSONArray torsoCenter = getCenter(torso, mainPose);
     PVector torsoVector = new PVector(torsoCenter.getFloat(0), torsoCenter.getFloat(1));
 
+    //Spine scale calculation
+
+    //Shoulders center
+    JSONArray shouldersCenter = getCenter(shoulders, mainPose);
+    //Hip center
+    JSONArray hipCenter = getCenter(hip, mainPose);
+
+    PVector shouldersVec = new PVector(shouldersCenter.getFloat(0), shouldersCenter.getFloat(1));
+    PVector hipVec = new PVector(hipCenter.getFloat(0), hipCenter.getFloat(1));
+
+    PVector spine = PVector.sub(hipVec, shouldersVec);
+
+    spineLength = spine.mag();
+    spineAngle = spine.heading();
+
+    float scaleFactor = SCALE_REF / spineLength;
+    //scaleFactor = 1;
+
     //We use these to calculate the span, so we don't need to center them 
     JSONArray leftWrist = mainPose.getJSONArray(ModelUtils.POSE_LEFT_WRIST_INDEX);
     JSONArray rightWrist = mainPose.getJSONArray(ModelUtils.POSE_RIGHT_WRIST_INDEX);
@@ -244,6 +287,16 @@ void runwayDataEvent(JSONObject runwayData) {
     JSONArray headCentered = new JSONArray();
     headCentered.setFloat(0, headCenter.getFloat(0) - torsoVector.x);
     headCentered.setFloat(1, headCenter.getFloat(1) - torsoVector.y);
+    headCentered.setFloat(0, headCentered.getFloat(0)*scaleFactor);
+    headCentered.setFloat(1, headCentered.getFloat(1)*scaleFactor);
+
+    //Translate the spine
+    JSONArray shouldersCentered = new JSONArray();
+    shouldersCentered.setFloat(0, shouldersCenter.getFloat(0) - torsoVector.x);
+    shouldersCentered.setFloat(1, shouldersCenter.getFloat(1) - torsoVector.y);
+    JSONArray hipCentered = new JSONArray();
+    hipCentered.setFloat(0, hipCenter.getFloat(0) - torsoVector.x);
+    hipCentered.setFloat(1, hipCenter.getFloat(1) - torsoVector.y);
 
     //Translate the joints
     JSONArray centeredPose = new JSONArray();
@@ -252,6 +305,8 @@ void runwayDataEvent(JSONObject runwayData) {
       JSONArray jointCentered = new JSONArray();
       jointCentered.setFloat(0, joint.getFloat(0) - torsoVector.x);
       jointCentered.setFloat(1, joint.getFloat(1) - torsoVector.y);
+      jointCentered.setFloat(0, jointCentered.getFloat(0)*scaleFactor);
+      jointCentered.setFloat(1, jointCentered.getFloat(1)*scaleFactor);
       centeredPose.setJSONArray(f, jointCentered);
     }
 
@@ -260,6 +315,9 @@ void runwayDataEvent(JSONObject runwayData) {
     frameData.setJSONArray("torso", torsoCenter);    
     frameData.setJSONArray("head", headCentered);
     frameData.setJSONArray("data", centeredPose);
+    frameData.setJSONArray("shoulders", shouldersCentered);
+    frameData.setJSONArray("hip", hipCentered);
+    frameData.setFloat("spinelength", spineLength);
 
     drawParts(frameData);
 

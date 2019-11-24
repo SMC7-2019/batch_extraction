@@ -79,7 +79,7 @@ void setup() {
   textSize(15);
   frameRate(60);
 
-  currentClip=5;
+  currentClip=2682;
   initBatch();
 
   runway = new RunwayHTTP(this);
@@ -133,7 +133,7 @@ void draw() {
     fullData.setInt("skipped", skippedCounter);
     fullData.setFloat("maxSpan", maxSpan);
     fullData.setString("style", STYLE);
-    saveJSONObject(fullData, jsonFolder+"/json_"+nf(currentClip, 5)+".json");
+    saveJSONObject(fullData, jsonFolder+"/json_"+nf(currentClip, 8)+".json");
     //println(jsonFolder+"/json_"+nf(currentClip, 5)+".json");
     initBatch();
   }
@@ -415,7 +415,7 @@ JSONArray getCenter(int[] markers, JSONArray data) {
 }
 
 public String getFilename(int index) {
-  return BASEFOLDER + "/frames/frame_" + nf(index, 5) + "." + EXTENSION;
+  return BASEFOLDER + "/frames/frame_" + nf(index, 8) + "." + EXTENSION;
 }
 
 public void initBatch() {
